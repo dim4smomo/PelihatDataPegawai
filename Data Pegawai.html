@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIAPMAN - Clean JSON Explorer</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; padding: 10px; font-size: 11px; }
+        
+        /* LOGIN */
+        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 10000; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width: 350px; text-align: center; }
+
+        /* STICKY HEADER */
+        .sticky-top-container { position: sticky; top: 0; z-index: 2000; background-color: #f1f5f9; padding: 10px 10px 5px 10px; margin: -10px -10px 0 -10px; border-bottom: 2px solid #cbd5e1; }
+        #mainTable thead th { position: sticky !important; background-color: #ffffff !important; z-index: 1500; box-shadow: inset 0 -2px 0 #cbd5e1, inset 0 1px 0 #cbd5e1; padding: 12px 8px !important; }
+
+        /* DROPDOWN SEARCH */
+        .search-wrapper { position: relative; }
+        .btn-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: none; background: #cbd5e1; color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 11; }
+        .custom-autocomplete { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #cbd5e1; border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 9999; display: none; box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+        .custom-autocomplete div { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .custom-autocomplete div:hover { background: #fee2e2; color: #ef4444; font-weight: 600; }
+
+        /* HEADER */
+        .card-header-custom { background: #0f172a; padding: 12px 25px; color: white; border-radius: 8px 8px 0 0; }
+        .slogan-kami { font-size: 18px; font-weight: 800; color: #ff0000; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* --- COLLAPSIBLE CLEAN JSON --- */
+        .full-data-wrapper { background: #1e293b; border-radius: 6px; padding: 15px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #e2e8f0; }
+        .json-node { margin-bottom: 4px; }
+        
+        /* Tombol + dan - */
+        .json-toggle { cursor: pointer; color: #38bdf8; font-weight: bold; user-select: none; display: inline-block; padding: 2px 5px; border-radius: 3px; background: rgba(56, 189, 248, 0.1); margin-right: 8px; }
+        .json-toggle:hover { background: rgba(56, 189, 248, 0.3); }
+        
+        .json-content { margin-left: 24px; border-left: 1px dashed #475569; padding-left: 12px; margin-top: 4px; }
+        
+        /* Logika Sembunyi/Muncul */
+        .collapsed > .json-content { display: none; }
+        .collapsed > .json-toggle::before { content: "+ "; }
+        .expanded > .json-toggle::before { content: "- "; }
+        
+        .data-row { display: flex; padding: 2px 0; align-items: baseline; }
+        .data-key { color: #94a3b8; width: 180px; flex-shrink: 0; }
+        .data-val-str { color: #4ade80; }
+        .data-val-num { color: #fbbf24; }
+        .data-val-null { color: #f87171; font-style: italic; }
+
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<div id="loginOverlay">
+    <div class="login-box shadow-lg">
+        <h6 class="fw-bold mb-3">SECURITY CHECK</h6>
+        <div class="mb-4">
+            <span class="text-secondary" style="font-size: 10px;">SIAPMAN Data Pegawai</span><br>
+            <span class="slogan-kami">Kami ada!!!</span>
+        </div>
+        <input type="password" id="passInput" class="form-control mb-3 text-center" placeholder="Password" onkeydown="if(event.key==='Enter') checkLogin()">
+        <button class="btn btn-danger w-100 fw-bold" onclick="checkLogin()">MASUK</button>
+    </div>
+</div>
+
+<div id="loader" class="loading-overlay" style="display:none;"><div class="spinner-border text-danger"></div></div>
+
+<div class="container-fluid" id="mainContent" style="display:none;">
+    <div class="sticky-top-container" id="filterSticky">
+        <div class="filter-section shadow-sm" style="background:white; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:8px;">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="fw-bold mb-1">Nama :</label>
+                    <div class="search-wrapper">
+                        <input type="text" id="nameSearchInput" class="form-control form-control-sm" placeholder="Cari Nama..." autocomplete="off">
+                        <button class="btn-clear" onclick="clearInput('nameSearchInput')">×</button>
+                        <div id="nameCustomList" class="custom-autocomplete"></div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="fw-bold mb-1">NIK :</label>
+                    <div class="search-wrapper">
+                        <input type="text" id="nikSearchInput" class="form-control form-control-sm" placeholder="NIK...">
+                        <button class="btn-clear" onclick="clearInput('nikSearchInput')">×</button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="fw-bold mb-1">Tipe Pegawai :</label>
+                    <div class="search-wrapper">
+                        <input type="text" id="typeSearchInput" class="form-control form-control-sm" placeholder="Pilih Tipe..." autocomplete="off">
+                        <button class="btn-clear" onclick="clearInput('typeSearchInput')">×</button>
+                        <div id="typeCustomList" class="custom-autocomplete"></div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="fw-bold mb-1">Unit / OPD :</label>
+                    <div class="search-wrapper">
+                        <input type="text" id="opdSearchInput" class="form-control form-control-sm" placeholder="Pilih Unit..." autocomplete="off">
+                        <button class="btn-clear" onclick="clearInput('opdSearchInput')">×</button>
+                        <div id="opdCustomList" class="custom-autocomplete"></div>
+                    </div>
+                </div>
+                <div class="col-md-2"><button class="btn btn-sm btn-dark w-100 fw-bold" onclick="location.reload()">LOGOUT</button></div>
+            </div>
+        </div>
+
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <div>
+                <span class="text-white-50" style="font-size: 10px;">SIAPMAN Data Pegawai (Clean Tree)</span><br>
+                <span class="slogan-kami">Kami ada!!!</span>
+            </div>
+            <h6 class="mb-0 fw-bold">SYSTEM DATA EXPLORER</h6>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mt-1">
+        <div class="card-body p-2">
+            <table id="mainTable" class="table table-sm table-hover w-100 border">
+                <thead>
+                    <tr>
+                        <th width="40">No</th>
+                        <th>Nama</th>
+                        <th>NIK</th>
+                        <th>NIP</th>
+                        <th>Tipe</th>
+                        <th>ID Absen</th>
+                        <th class="text-center" width="80">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+const _0x1a2b = "MA=="; 
+const DATA_URL = "https://raw.githubusercontent.com/dim4smomo/PelihatDataPegawai/refs/heads/main/Data%20Pegawai.txt";
+let dataTableInstance = null;
+let masterNames = [], masterTypes = [], masterOpds = [];
+
+function checkLogin() {
+    if (btoa($('#passInput').val()) === _0x1a2b) {
+        $('#loginOverlay').hide(); $('#mainContent').show();
+        fetchGitHubData();
+    } else { alert("Password Salah!"); }
+}
+
+async function fetchGitHubData() {
+    $('#loader').show();
+    try {
+        const res = await fetch(DATA_URL);
+        const txt = await res.text();
+        const cleanJson = txt.substring(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
+        const data = JSON.parse(cleanJson);
+        const rows = data.rows || [];
+
+        const nSet = new Set(), tSet = new Set(), oSet = new Set();
+        rows.forEach(r => {
+            if(r.Name) nSet.add(r.Name);
+            if(r.EmployeeType?.Name) tSet.add(r.EmployeeType.Name);
+            if(r.Company?.Name) oSet.add(r.Company.Name);
+        });
+        masterNames = [...nSet].sort(); masterTypes = [...tSet].sort(); masterOpds = [...oSet].sort();
+
+        initTable(rows);
+        initSmartFilters();
+        adjustSticky();
+        $('#loader').hide();
+    } catch (e) { console.error(e); $('#loader').hide(); }
+}
+
+function adjustSticky() {
+    setTimeout(() => {
+        const h = $('#filterSticky').outerHeight();
+        $('#mainTable thead th').css('top', (h - 1) + 'px');
+    }, 500);
+}
+
+function initTable(rows) {
+    dataTableInstance = $('#mainTable').DataTable({
+        data: rows, pageLength: 50, dom: '<"p-2"l>rtip',
+        columns: [
+            { data: null, render: (d,t,r,m) => m.row + 1 },
+            { data: 'Name' },
+            { data: 'NationalIdentityNumber', defaultContent: '-' },
+            { data: 'EmployeeIdNumber', defaultContent: '-' },
+            { data: 'EmployeeType.Name', defaultContent: '-' },
+            { data: 'AttendanceUserID', defaultContent: '-' },
+            { className: 'dt-control text-center', data: null, render: () => '<button class="btn btn-danger btn-sm fw-bold" style="font-size:9px">DETAIL</button>' }
+        ]
+    });
+
+    $('#mainTable tbody').on('click', 'td.dt-control', function() {
+        let tr = $(this).closest('tr'), row = dataTableInstance.row(tr);
+        if(row.child.isShown()) {
+            row.child.hide(); $(this).find('button').text('DETAIL').addClass('btn-danger').removeClass('btn-dark');
+        } else {
+            row.child(renderJsonDetail(row.data())).show();
+            $(this).find('button').text('TUTUP').addClass('btn-dark').removeClass('btn-danger');
+        }
+    });
+}
+
+function renderJsonDetail(d) {
+    const formatValue = (v) => {
+        if (v === null) return `<span class="data-val-null">null</span>`;
+        if (typeof v === 'number') return `<span class="data-val-num">${v}</span>`;
+        if (Array.isArray(v)) return `<span class="data-val-null">[]</span>`;
+        return `<span class="data-val-str">"${v}"</span>`;
+    };
+
+    const buildNode = (key, val, isRoot = false) => {
+        // Jika value adalah object
+        if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+            let inner = '';
+            for (let k in val) { inner += buildNode(k, val[k]); }
+            return `
+                <div class="json-node collapsed">
+                    <span class="json-toggle" onclick="toggleJson(this)">${isRoot ? 'DATA_OBJECT' : key}</span>
+                    <div class="json-content">${inner}</div>
+                </div>`;
+        }
+        // Jika data biasa
+        return `<div class="data-row"><div class="data-key">${key}:</div><div>${formatValue(val)}</div></div>`;
+    };
+
+    return `<div class="full-data-wrapper">${buildNode('root', d, true)}</div>`;
+}
+
+// Fungsi Buka Tutup
+window.toggleJson = function(el) {
+    const parent = el.parentElement;
+    parent.classList.toggle('collapsed');
+    parent.classList.toggle('expanded');
+};
+
+function initSmartFilters() {
+    $('#nikSearchInput').on('input', function() { dataTableInstance.column(2).search(this.value).draw(); toggleX(this); });
+    setupSmartSearch('nameSearchInput', 'nameCustomList', masterNames, 1);
+    setupSmartSearch('typeSearchInput', 'typeCustomList', masterTypes, 4);
+    setupSmartSearch('opdSearchInput', 'opdCustomList', masterOpds, -1);
+}
+
+function setupSmartSearch(inputId, listId, dataArray, colIndex) {
+    const input = document.getElementById(inputId), list = document.getElementById(listId);
+    const refresh = (txt = '') => {
+        list.innerHTML = '';
+        const filt = dataArray.filter(i => i.toLowerCase().includes(txt.toLowerCase()));
+        filt.forEach(i => {
+            const div = document.createElement('div');
+            div.textContent = i;
+            div.onclick = (e) => {
+                e.stopPropagation();
+                input.value = i; list.style.display = 'none'; toggleX(input);
+                if(colIndex === -1) dataTableInstance.search(i).draw();
+                else dataTableInstance.column(colIndex).search('^' + i + '$', true, false).draw();
+            };
+            list.appendChild(div);
+        });
+        list.style.display = filt.length > 0 ? 'block' : 'none';
+    };
+    input.onclick = (e) => { e.stopPropagation(); $('.custom-autocomplete').not(list).hide(); refresh(input.value); };
+    input.oninput = () => { refresh(input.value); toggleX(input); 
+        if(colIndex === -1) dataTableInstance.search(input.value).draw();
+        else dataTableInstance.column(colIndex).search(input.value).draw();
+    };
+}
+
+function toggleX(el) { el.nextElementSibling.style.display = el.value.length > 0 ? 'flex' : 'none'; }
+function clearInput(id) {
+    const input = document.getElementById(id);
+    input.value = ''; input.nextElementSibling.style.display = 'none';
+    dataTableInstance.search('').columns().search('').draw();
+    input.focus();
+}
+
+$(document).click(() => $('.custom-autocomplete').hide());
+window.addEventListener('resize', adjustSticky);
+</script>
+</body>
+</html>
